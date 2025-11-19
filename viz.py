@@ -57,18 +57,14 @@ def network_portrayal(G):
 infection_chart = ChartModule(
     [
         {"Label": "Infected", "Color": "red"},
-        {"Label": "AvgStress", "Color": "blue"},
-        {"Label": "HighStressFrac", "Color": "green"},
     ],
     data_collector_name="datacollector",
 )
 
-role_stress_chart = ChartModule(
+stress_chart = ChartModule(
     [
-        {"Label": "AvgStress_Student", "Color": "dodgerblue"},
-        {"Label": "AvgStress_Office", "Color": "seagreen"},
-        {"Label": "AvgStress_Service", "Color": "darkorange"},
-        {"Label": "AvgStress_Owner", "Color": "purple"},
+        {"Label": "AvgStress", "Color": "blue"},
+        {"Label": "HighStressFrac", "Color": "green"},
     ],
     data_collector_name="datacollector",
 )
@@ -146,7 +142,7 @@ network = NetworkModule(network_portrayal, 500, 500)
 
 server = ModularServer(
     TownModel,
-    [network, infection_chart, role_stress_chart],
+    [network, infection_chart, stress_chart],
     "Pandemic Social Simulation",
     model_params,
 )
