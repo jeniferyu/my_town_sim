@@ -131,8 +131,12 @@ class ShutdownPolicy:
 class TownAgent(Agent):
     def __init__(self, unique_id, model, role, home, work=None, business=None,
                  social_need=0.5, has_dependents=False):
-        super().__init__(model)
-        self.unique_id = unique_id
+        try:
+            super().__init__(model)
+            self.unique_id = unique_id
+        except TypeError:
+            # Mesa <3 signature: (unique_id, model)
+            super().__init__(unique_id, model)
         self.role = role  # "student", "office", "service", "owner"
         self.home = home
         self.work = work        # office / school / shop / essential workplace

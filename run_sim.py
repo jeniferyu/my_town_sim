@@ -8,6 +8,7 @@ from town_model import TownModel
 
 SIM_HOURS = 24 * 60
 POLICIES = ["none", "targeted", "full"]
+PLOTS_DIR = Path("plots")
 
 
 def run_policy(policy_mode: str, seed: int = 42) -> pd.DataFrame:
@@ -70,7 +71,8 @@ def save_or_show(fig, filename: str):
     import matplotlib.pyplot as plt
 
     fig.tight_layout()
-    path = Path(filename)
+    path = PLOTS_DIR / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path)
     print(f"Plot saved to {path}")
     backend = plt.get_backend().lower()
@@ -131,8 +133,9 @@ def plot_stress_by_role(all_results: pd.DataFrame):
     axes[-1].set_xlabel("Hour")
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncols=3)
+    fig.legend(handles, labels, loc="lower center", ncols=3, bbox_to_anchor=(0.5, -0.05))
     fig.suptitle("Stress by role and policy")
+    plt.subplots_adjust(top=0.9, bottom=0.2)
     save_or_show(fig, "stress_by_role.png")
 
 
