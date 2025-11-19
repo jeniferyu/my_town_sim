@@ -1,0 +1,20 @@
+#elements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+#elements #elements-topbar {
+  flex-basis: 100%;
+}
+
+#elements canvas,
+#elements .NetworkModule_d3 {
+  flex: 1 1 calc(50% - 16px);
+  min-width: 320px;
+  max-width: 100%;
+}
+
+#elements .NetworkModule_d3 {
+  min-height: 360px;
+}

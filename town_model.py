@@ -26,6 +26,11 @@ from mesa.datacollection import DataCollector
 import numpy as np
 import random
 
+try:
+    import networkx as nx
+except ImportError:
+    nx = None
+
 
 # ---------- POLICY ----------
 
@@ -243,7 +248,7 @@ class TownAgent(Agent):
             self.stress = min(1.0, self.stress + m.fear_stress)
 
         # Economic stress: small business owners whose business is closed
-        if self.role == "owner":
+        if self.role == "owner" and m.enable_owner_econ_stress:
             if not m.policy.allows_business_open(self):
                 self.stress = min(1.0, self.stress + m.economic_stress)
 
@@ -252,7 +257,7 @@ class TownAgent(Agent):
             self.stress = min(1.0, self.stress + m.dependent_stress)
 
         # Social influence: move towards neighbors' average stress
-        if self.today_contacts:
+        if m.enable_social_influence and self.today_contacts:
             avg_neighbor_stress = np.mean([a.stress for a in self.today_contacts])
             alpha = m.stress_influence
             self.stress = (1 - alpha) * self.stress + alpha * avg_neighbor_stress
@@ -265,7 +270,18 @@ class TownAgent(Agent):
 # ---------- MODEL ----------
 
 class TownModel(Model):
-    def __init__(self, N=200, policy_mode="none", seed=None):
+    def __init__(
+        self,
+        N=200,
+        policy_mode="none",
+        seed=None,
+        beta=0.05,
+        stress_decay=0.001,
+        incubation_days=3,
+        infectious_days=7,
+        enable_owner_econ_stress=True,
+        enable_social_influence=True,
+    ):
         super().__init__()
         if seed is not None:
             random.seed(seed)
@@ -276,24 +292,26 @@ class TownModel(Model):
         self.schedule = RandomActivation(self)
         self.current_hour = 0
 
-        # Disease parameters
         # Disease parameters (in hours)
-        self.incubation_hours = 3 * 24
-        self.infectious_hours = 7 * 24
-        self.beta = 0.05  # infection prob per contact per infected in location
+        self.incubation_hours = int(incubation_days * 24)
+        self.infectious_hours = int(infectious_days * 24)
+        self.beta = beta  # infection prob per contact per infected in location
 
         # Stress parameters (calibrated for hourly steps)
-        self.stress_decay = 0.001
+        self.stress_decay = stress_decay
         self.isolation_stress = 0.002
         self.fear_stress = 0.005
         self.economic_stress = 0.005
         self.dependent_stress = 0.002
         self.stress_influence = 0.1
         self.target_contacts = 5
+        self.enable_owner_econ_stress = enable_owner_econ_stress
+        self.enable_social_influence = enable_social_influence
 
         # Policy
         self.location_types = {}   # name -> type, filled below
         self.policy = ShutdownPolicy(self, policy_mode)
+        self.interaction_graph = None
 
         # --- Locations ---
         # Homes: households of size 1-4
@@ -471,6 +489,35 @@ class TownModel(Model):
                 ) if any(a.role == "owner" for a in m.schedule.agents) else 0.0,
             }
         )
+        self._update_interaction_graph()
+
+    def _update_interaction_graph(self):
+        """
+        Build a lightweight network of the latest contacts so the web
+        visualization can render a network without requiring spatial data.
+        """
+        if nx is None:
+            self.interaction_graph = None
+            self.G = None
+            return
+
+        G = nx.Graph()
+        for agent in self.schedule.agents:
+            G.add_node(agent.unique_id, agent=agent)
+
+        seen_edges = set()
+        for agent in self.schedule.agents:
+            for contact in agent.today_contacts:
+                if agent.unique_id == contact.unique_id:
+                    continue
+                edge = tuple(sorted((agent.unique_id, contact.unique_id)))
+                if edge in seen_edges:
+                    continue
+                G.add_edge(*edge)
+                seen_edges.add(edge)
+
+        self.interaction_graph = G
+        self.G = G
 
     def step(self):
         """
@@ -521,6 +568,9 @@ class TownModel(Model):
         for a in self.schedule.agents:
             a.update_health()
             a.update_stress()
+
+        # Update visualization network before collecting stats
+        self._update_interaction_graph()
 
         # 4. Collect data
         self.datacollector.collect(self)
