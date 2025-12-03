@@ -158,6 +158,11 @@ class TownAgent(Agent):
         self.compliant = True
         self.has_dependents = has_dependents
         self.employed = True     # owners may effectively become "unemployed" if business stays closed
+        params = model.role_compliance_params.get(role, model.default_compliance_params)
+        self.break_threshold = params["break_threshold"]
+        self.return_threshold = params["return_threshold"]
+        self.break_prob = params["break_prob"]
+        self.return_prob = params["return_prob"]
 
         # For daily stats
         self.today_contacts = set()
@@ -170,7 +175,8 @@ class TownAgent(Agent):
         # Work / school hours
         if self.role in ["office", "service", "owner"]:
             if 9 <= current_hour < 17:  # work block
-                if policy.allows_work(self) and self.work is not None:
+                can_work = (policy.allows_work(self) or not self.compliant) and self.work is not None
+                if can_work:
                     self.location = self.work
                 else:
                     self.location = self.home
@@ -179,7 +185,8 @@ class TownAgent(Agent):
 
         elif self.role == "student":
             if 8 <= current_hour < 15:  # school block
-                if policy.allows_school(self) and self.work is not None:
+                can_school = (policy.allows_school(self) or not self.compliant) and self.work is not None
+                if can_school:
                     self.location = self.work  # here work = school
                 else:
                     self.location = self.home
@@ -206,10 +213,13 @@ class TownAgent(Agent):
 
         if self.random.random() < p_go_out:
             # Try to pick a leisure location allowed by policy
-            allowed = [
-                loc for loc in self.model.leisure_locations
-                if policy.allows_leisure_location(loc)
-            ]
+            if self.compliant:
+                allowed = [
+                    loc for loc in self.model.leisure_locations
+                    if policy.allows_leisure_location(loc)
+                ]
+            else:
+                allowed = list(self.model.leisure_locations)
             if allowed:
                 self.location = self.random.choice(allowed)
             else:
@@ -249,7 +259,7 @@ class TownAgent(Agent):
 
         # Economic stress: small business owners whose business is closed
         if self.role == "owner" and m.enable_owner_econ_stress:
-            if not m.policy.allows_business_open(self):
+            if self.compliant and not m.policy.allows_business_open(self):
                 self.stress = min(1.0, self.stress + m.economic_stress)
 
         # Dependents: if they have dependents and high infection around, extra stress
@@ -262,9 +272,11 @@ class TownAgent(Agent):
             alpha = m.stress_influence
             self.stress = (1 - alpha) * self.stress + alpha * avg_neighbor_stress
 
-        # Compliance change: very high stress → more likely to stop complying
-        if self.stress > 0.8 and self.random.random() < 0.1:
+        # Compliance change: stress-based rule-breaking with role-specific thresholds
+        if self.stress > self.break_threshold and self.random.random() < self.break_prob:
             self.compliant = False
+        elif not self.compliant and self.stress < self.return_threshold and self.random.random() < self.return_prob:
+            self.compliant = True
 
 
 # ---------- MODEL ----------
@@ -307,6 +319,38 @@ class TownModel(Model):
         self.target_contacts = 5
         self.enable_owner_econ_stress = enable_owner_econ_stress
         self.enable_social_influence = enable_social_influence
+        self.default_compliance_params = {
+            "break_threshold": 0.8,
+            "return_threshold": 0.5,
+            "break_prob": 0.1,
+            "return_prob": 0.05,
+        }
+        self.role_compliance_params = {
+            "student": {
+                "break_threshold": 0.85,
+                "return_threshold": 0.45,
+                "break_prob": 0.05,
+                "return_prob": 0.1,
+            },
+            "office": {
+                "break_threshold": 0.8,
+                "return_threshold": 0.5,
+                "break_prob": 0.1,
+                "return_prob": 0.05,
+            },
+            "service": {
+                "break_threshold": 0.78,
+                "return_threshold": 0.5,
+                "break_prob": 0.12,
+                "return_prob": 0.04,
+            },
+            "owner": {
+                "break_threshold": 0.7,
+                "return_threshold": 0.55,
+                "break_prob": 0.15,
+                "return_prob": 0.03,
+            },
+        }
 
         # Policy
         self.location_types = {}   # name -> type, filled below
@@ -474,6 +518,7 @@ class TownModel(Model):
                 "Infected": lambda m: sum(1 for a in m.schedule.agents if a.health_state == "I"),
                 "AvgStress": lambda m: np.mean([a.stress for a in m.schedule.agents]),
                 "HighStressFrac": lambda m: np.mean([a.stress > 0.8 for a in m.schedule.agents]),
+                "NonCompliantFrac": lambda m: np.mean([not a.compliant for a in m.schedule.agents]),
                 # By-role examples (optional, useful for plots)
                 "AvgStress_Student": lambda m: np.mean(
                     [a.stress for a in m.schedule.agents if a.role == "student"]

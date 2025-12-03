@@ -47,6 +47,7 @@ def summarize_policy(df: pd.DataFrame) -> dict:
         "stress_area_under_curve": float(df_sorted["AvgStress"].sum()),
         "max_owner_stress": float(df_sorted["AvgStress_Owner"].max()),
         "time_until_stress_near_baseline_hours": recovery_hours,
+        "max_noncompliant_frac": float(df_sorted["NonCompliantFrac"].max()),
     }
     return metrics
 
@@ -107,6 +108,21 @@ def plot_average_stress(all_results: pd.DataFrame):
     ax.set_title("Average stress by policy")
     ax.legend()
     save_or_show(fig, "average_stress.png")
+
+
+def plot_high_stress_fraction(all_results: pd.DataFrame):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    for policy, grp in all_results.groupby("policy"):
+        ax.plot(grp["hour"], grp["HighStressFrac"], label=policy.title())
+
+    ax.set_xlabel("Hour of simulation")
+    ax.set_ylabel("Fraction with stress > 0.8")
+    ax.set_ylim(0, 1)
+    ax.set_title("High-stress population share")
+    ax.legend()
+    save_or_show(fig, "high_stress_fraction.png")
 
 
 def plot_stress_by_role(all_results: pd.DataFrame):
@@ -197,6 +213,7 @@ def main():
 
     plot_infections(all_results)
     plot_average_stress(all_results)
+    plot_high_stress_fraction(all_results)
     plot_stress_by_role(all_results)
     plot_infection_stress_per_policy(all_results)
     plot_policy_comparison_small_multiples(all_results)

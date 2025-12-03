@@ -1,4 +1,4 @@
-policy,peak_infected,time_to_peak_infected_hours,peak_stress,stress_area_under_curve,max_owner_stress,time_until_stress_near_baseline_hours
-none,193,243,1.0,846.5232663803695,1.0,1280.0
-targeted,197,209,1.0,1090.4701535553454,1.0,
-full,34,480,0.9284444893641011,1086.3219446751486,0.9816877869318826,
+policy,peak_infected,time_to_peak_infected_hours,peak_stress,stress_area_under_curve,max_owner_stress,time_until_stress_near_baseline_hours,max_noncompliant_frac
+none,195,246,1.0,837.479992920502,1.0,1269.0,1.0
+targeted,197,216,1.0,906.3550278855727,1.0,,1.0
+full,72,822,0.9317600739337659,1012.434561180411,0.9761216695890825,,0.895
